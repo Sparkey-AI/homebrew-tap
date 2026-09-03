@@ -2,7 +2,7 @@ class Sparkey < Formula
   desc "Capture coding-agent sessions from Claude Code, Cursor, Codex, and more"
   homepage "https://sparkey.ai"
   version "0.5.21"
-  license "Proprietary"
+  license :cannot_represent
 
   on_macos do
     if Hardware::CPU.arm?

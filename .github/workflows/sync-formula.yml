@@ -37,7 +37,7 @@ jobs:
             desc "Capture coding-agent sessions from Claude Code, Cursor, Codex, and more"
             homepage "https://sparkey.ai"
             version "${VERSION}"
-            license "Proprietary"
+            license :cannot_represent
 
             on_macos do
               if Hardware::CPU.arm?
