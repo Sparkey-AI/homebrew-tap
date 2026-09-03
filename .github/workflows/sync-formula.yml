@@ -1,0 +1,76 @@
+# Sync Formula/sparkey.rb from the public release mirror.
+#
+# The Sparkey source repo is private and org policy disables deploy keys, so
+# the release pipeline cannot push here. Instead this tap pulls: the mirror's
+# latest.json (written by the release pipeline) is the source of truth for the
+# current version and the per-platform SHA256s.
+name: Sync formula
+on:
+  schedule:
+    - cron: "37 */6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update formula if a new version is on the mirror
+        run: |
+          set -euo pipefail
+          curl -fsSL https://install.sparkey.ai/latest.json -o /tmp/latest.json
+          VERSION=$(jq -r '.latest_version // empty' /tmp/latest.json)
+          sha() { jq -r --arg a "$1" '.assets[$a].sha256 // empty' /tmp/latest.json; }
+          DARM=$(sha sparkey-darwin-arm64); DX64=$(sha sparkey-darwin-x64)
+          LARM=$(sha sparkey-linux-arm64);  LX64=$(sha sparkey-linux-x64)
+          if [ -z "$VERSION" ] || [ -z "$DARM" ] || [ -z "$DX64" ] || [ -z "$LARM" ] || [ -z "$LX64" ]; then
+            echo "mirror latest.json missing version or a sha — skipping"; exit 0
+          fi
+          CURRENT=$(sed -n 's/^  version "\(.*\)"$/\1/p' Formula/sparkey.rb 2>/dev/null || true)
+          if [ "$VERSION" = "$CURRENT" ]; then
+            echo "tap already at $VERSION"; exit 0
+          fi
+          BASE="https://install.sparkey.ai/v${VERSION}"
+          cat > Formula/sparkey.rb <<RUBY
+          class Sparkey < Formula
+            desc "Capture coding-agent sessions from Claude Code, Cursor, Codex, and more"
+            homepage "https://sparkey.ai"
+            version "${VERSION}"
+            license "Proprietary"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${BASE}/sparkey-darwin-arm64"
+                sha256 "${DARM}"
+              else
+                url "${BASE}/sparkey-darwin-x64"
+                sha256 "${DX64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "${BASE}/sparkey-linux-arm64"
+                sha256 "${LARM}"
+              else
+                url "${BASE}/sparkey-linux-x64"
+                sha256 "${LX64}"
+              end
+            end
+
+            def install
+              bin.install Dir["sparkey-*"].first => "sparkey"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/sparkey version")
+            end
+          end
+          RUBY
+          sed -i 's/^          //' Formula/sparkey.rb
+          git config user.name "sparkey-release"
+          git config user.email "release@sparkey.ai"
+          git add Formula/sparkey.rb
+          git commit -m "sparkey v$VERSION"
+          git push
