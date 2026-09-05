@@ -4,19 +4,26 @@
 # the release pipeline cannot push here. Instead this tap pulls: the mirror's
 # latest.json (written by the release pipeline) is the source of truth for the
 # current version and the per-platform SHA256s.
+#
+# main is protected by the org-standard ruleset (PRs mandatory, one approval),
+# so the sync opens a `formula/v<version>` pull request instead of pushing to
+# main. GitHub Actions cannot bypass the ruleset and the org blocks
+# GITHUB_TOKEN-created PRs, so the PR is opened with TAP_SYNC_TOKEN — a
+# fine-grained PAT scoped to this repo only (contents + pull requests: write).
 name: Sync formula
 on:
   schedule:
     - cron: "37 */6 * * *"
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update formula if a new version is on the mirror
+      - name: Render the formula for the mirror's latest version
+        id: render
         run: |
           set -euo pipefail
           curl -fsSL https://install.sparkey.ai/latest.json -o /tmp/latest.json
@@ -69,8 +76,28 @@ jobs:
           end
           RUBY
           sed -i 's/^          //' Formula/sparkey.rb
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Open a pull request with the new formula
+        if: steps.render.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.TAP_SYNC_TOKEN }}
+          VERSION: ${{ steps.render.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::TAP_SYNC_TOKEN is not set. Mint a fine-grained PAT scoped to this repo (Contents + Pull requests: read/write) and add it as a repository secret named TAP_SYNC_TOKEN."
+            exit 1
+          fi
+          BRANCH="formula/v${VERSION}"
           git config user.name "sparkey-release"
           git config user.email "release@sparkey.ai"
+          git checkout -b "$BRANCH"
           git add Formula/sparkey.rb
-          git commit -m "sparkey v$VERSION"
-          git push
+          git commit -m "sparkey v${VERSION}"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"
+          if [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number')" ]; then
+            echo "PR for $BRANCH already open — updated its branch"; exit 0
+          fi
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" \
+            --title "sparkey v${VERSION}" \
+            --body "Rendered from https://install.sparkey.ai/latest.json by the scheduled sync. Binaries and SHA256s come from the release mirror; review and merge to publish."
