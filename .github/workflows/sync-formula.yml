@@ -94,6 +94,9 @@ jobs:
           # every whitespace character before the token is used anywhere.
           GH_TOKEN="$(printf '%s' "${GH_TOKEN:-}" | tr -d '[:space:]')"
           export GH_TOKEN
+          # The trimmed value may differ from the stored secret, so re-register
+          # it for log masking before it can appear in any git/gh error output.
+          [ -n "$GH_TOKEN" ] && echo "::add-mask::$GH_TOKEN"
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "::error::TAP_SYNC_TOKEN is not set. Mint a fine-grained PAT scoped to this repo (Contents + Pull requests: read/write) and add it as a repository secret named TAP_SYNC_TOKEN."
             exit 1
