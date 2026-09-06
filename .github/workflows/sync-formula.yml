@@ -21,7 +21,12 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      # persist-credentials off: checkout's stored GITHUB_TOKEN header would
+      # otherwise override the PAT in the push URL (push denied to
+      # github-actions[bot]).
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Render the formula for the mirror's latest version
         id: render
         run: |
