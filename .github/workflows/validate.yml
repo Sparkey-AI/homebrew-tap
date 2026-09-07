@@ -1,0 +1,50 @@
+# Validates Formula/sparkey.rb on every PR: Ruby syntax, formula shape, and
+# integrity against the release mirror (the version and every per-platform
+# SHA256 must match the mirror's latest.json, and every download URL must
+# stay on install.sparkey.ai). This is also the automated check that every
+# merge into main carries; the scheduled sync's PRs run it too.
+name: Validate formula
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ruby syntax
+        run: ruby -c Formula/sparkey.rb
+      - name: Validate formula shape and mirror integrity
+        run: |
+          set -euo pipefail
+          F=Formula/sparkey.rb
+
+          grep -Eq '^class Sparkey < Formula$' "$F" || { echo "formula class header missing"; exit 1; }
+          VERSION=$(sed -n 's/^  version "\(.*\)"$/\1/p' "$F")
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$' || { echo "bad version: '$VERSION'"; exit 1; }
+          grep -Eq '^    bin\.install Dir\["sparkey-\*"\]\.first => "sparkey"$' "$F" || { echo "install stanza changed"; exit 1; }
+
+          # Every url line is followed by its sha256; the pairs are read in
+          # file order (darwin-arm64, darwin-x64, linux-arm64, linux-x64).
+          URLS=($(sed -n 's/^      url "\(.*\)"$/\1/p' "$F"))
+          SHAS=($(sed -n 's/^      sha256 "\(.*\)"$/\1/p' "$F"))
+          [ "${#URLS[@]}" -eq 4 ] && [ "${#SHAS[@]}" -eq 4 ] || { echo "expected 4 url/sha256 pairs, found ${#URLS[@]}/${#SHAS[@]}"; exit 1; }
+
+          curl -fsSL https://install.sparkey.ai/latest.json -o /tmp/latest.json
+          MIRROR_VERSION=$(jq -r '.latest_version // empty' /tmp/latest.json)
+          [ "$VERSION" = "$MIRROR_VERSION" ] || { echo "version $VERSION != mirror ${MIRROR_VERSION:-<missing>}"; exit 1; }
+
+          for i in 0 1 2 3; do
+            URL="${URLS[$i]}"; SHA="${SHAS[$i]}"
+            echo "$SHA" | grep -Eq '^[0-9a-f]{64}$' || { echo "bad sha256: $SHA"; exit 1; }
+            case "$URL" in
+              "https://install.sparkey.ai/v$VERSION/sparkey-"*) ;;
+              *) echo "download url does not match the release mirror pattern: $URL"; exit 1 ;;
+            esac
+            ASSET="${URL##*/}"
+            MIRROR_SHA=$(jq -r --arg a "$ASSET" '.assets[$a].sha256 // empty' /tmp/latest.json)
+            [ "$SHA" = "$MIRROR_SHA" ] || { echo "sha256 mismatch for $ASSET: formula=$SHA mirror=${MIRROR_SHA:-<missing>}"; exit 1; }
+          done
+          echo "formula OK: sparkey v$VERSION"
