@@ -1,26 +1,26 @@
 class Sparkey < Formula
   desc "Capture coding-agent sessions from Claude Code, Cursor, Codex, and more"
   homepage "https://sparkey.ai"
-  version "0.5.29"
+  version "0.6.0"
   license :cannot_represent
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://install.sparkey.ai/v0.5.29/sparkey-darwin-arm64"
-      sha256 "2188b8031a8f73a54c72e77339959a69010a82600e0d86d7d23c7ac333f9a5a3"
+      url "https://install.sparkey.ai/v0.6.0/sparkey-darwin-arm64"
+      sha256 "59d18b118b3079c9c04f72569077bdb9a1a219141482e1514b585a70a61cc6e7"
     else
-      url "https://install.sparkey.ai/v0.5.29/sparkey-darwin-x64"
-      sha256 "e47970a980eba216d5167e5399b89e352238fd5a492ed899f5dedad57a33a16e"
+      url "https://install.sparkey.ai/v0.6.0/sparkey-darwin-x64"
+      sha256 "241b5b99c89943a8d5c1a80d64b20df0abd9d41bfbffe16508aa6c39f279addc"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://install.sparkey.ai/v0.5.29/sparkey-linux-arm64"
-      sha256 "ff0b695c14674c69014b3b6e249f57d0c9b9ab0f5b8b06425a89603c29146c55"
+      url "https://install.sparkey.ai/v0.6.0/sparkey-linux-arm64"
+      sha256 "f476367133f33b37b18224cb6e9123d43e653a3398787eb9e746d28eda0342cc"
     else
-      url "https://install.sparkey.ai/v0.5.29/sparkey-linux-x64"
-      sha256 "1e95be3825b10b011076b4ae7e74d04a843cde5202f0469f28dcd01eb974a472"
+      url "https://install.sparkey.ai/v0.6.0/sparkey-linux-x64"
+      sha256 "b06f7966e1315812d1fe633a15e0710fa9dfc8ebff40ef94aa0da24242742480"
     end
   end
 
